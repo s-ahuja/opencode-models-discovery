@@ -4,10 +4,11 @@
  * Automated Release Script
  *
  * Usage:
- *   bun scripts/release.ts patch   # 0.1.0 -> 0.1.1
- *   bun scripts/release.ts minor   # 0.1.0 -> 0.2.0
- *   bun scripts/release.ts major   # 0.1.0 -> 1.0.0
- *   bun scripts/release.ts 0.2.0   # Set specific version
+ *   bun scripts/release.ts prepare patch   # Open a release PR for 0.1.0 -> 0.1.1
+ *   bun scripts/release.ts prepare minor   # Open a release PR for 0.1.0 -> 0.2.0
+ *   bun scripts/release.ts prepare major   # Open a release PR for 0.1.0 -> 1.0.0
+ *   bun scripts/release.ts prepare 0.2.0   # Open a release PR for a specific version
+ *   bun scripts/release.ts publish         # Tag and publish the current package version
  */
 
 import { readFileSync, writeFileSync } from 'fs'
@@ -82,6 +83,18 @@ function runCommand(cmd: string, description: string): void {
     console.error(`✗ ${description} failed`)
     throw error
   }
+}
+
+function getCommandOutput(cmd: string): string {
+  return execSync(cmd, { encoding: 'utf-8' }).trim()
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function remoteTagExists(tagName: string): boolean {
+  return getCommandOutput(`git ls-remote --tags origin ${shellQuote(tagName)}`).length > 0
 }
 
 function getPreviousTag(): string | null {
@@ -180,22 +193,19 @@ bun add ${name}@${version}
 \`\`\``
 }
 
-async function main() {
+function prepareRelease(versionType: string): void {
   const { name, repositorySlug } = getPackageInfo()
-  const versionType = process.argv[2]
-
-  if (!versionType) {
-    console.error('Usage: bun scripts/release.ts [patch|minor|major|0.x.x]')
-    process.exit(1)
-  }
-
   const currentVersion = getCurrentVersion()
   const newVersion = bumpVersion(currentVersion, versionType)
+  const branchName = `release/v${newVersion}`
 
-  console.log(`\n🚀 Starting release process`)
+  console.log(`\n🚀 Preparing release PR`)
   console.log(`   Current version: ${currentVersion}`)
   console.log(`   New version: ${newVersion}`)
   console.log(`   Version type: ${versionType}`)
+  console.log(`   Branch: ${branchName}`)
+
+  runCommand(`git switch -c ${branchName}`, `Creating release branch ${branchName}`)
 
   updatePackageJson(newVersion)
 
@@ -208,15 +218,47 @@ async function main() {
     runCommand(`git commit -m "chore: bump version to ${newVersion}"`, 'Committing version bump')
   }
 
-  const tagName = `v${newVersion}`
-  runCommand(`git tag ${tagName} -m "Release ${tagName}"`, `Creating git tag ${tagName}`)
-  runCommand('git push', 'Pushing commits')
-  runCommand(`git push origin ${tagName}`, `Pushing tag ${tagName}`)
+  const prBody = `## Summary
 
-  console.log('\n📝 Creating GitHub release...')
+- Bump ${name} to v${newVersion}.
+- Merging this PR will trigger the publish workflow from protected main.
+
+## Validation
+
+- npm run build`
+
+  runCommand(`git push --set-upstream origin ${branchName}`, 'Pushing release branch')
+  runCommand(
+    `gh pr create --repo ${repositorySlug} --base main --head ${branchName} --title ${shellQuote(`chore: release v${newVersion}`)} --body ${shellQuote(prBody)}`,
+    'Creating release pull request'
+  )
+
+  console.log(`\n✅ Release PR for v${newVersion} created.`)
+}
+
+function publishCurrentVersion(): void {
+  const { name, repositorySlug } = getPackageInfo()
+  const newVersion = getCurrentVersion()
+
+  const tagName = `v${newVersion}`
+
+  if (remoteTagExists(tagName)) {
+    console.log(`\n✓ ${tagName} already exists on origin. Nothing to publish.`)
+    return
+  }
+
+  console.log(`\n🚀 Publishing release ${tagName}`)
+
+  runCommand('npm run build', 'Running build and tests')
+
   const releaseNotes = generateReleaseNotes(newVersion)
   const notesFile = `/tmp/release-notes-${newVersion}.md`
   writeFileSync(notesFile, releaseNotes)
+
+  runCommand(`git tag ${tagName} -m "Release ${tagName}"`, `Creating git tag ${tagName}`)
+  runCommand(`git push origin ${tagName}`, `Pushing tag ${tagName}`)
+
+  console.log('\n📝 Creating GitHub release...')
 
   try {
     execSync(`gh release create ${tagName} --title "v${newVersion}" --notes-file ${notesFile}`, { stdio: 'inherit' })
@@ -258,6 +300,28 @@ async function main() {
     console.log(`   - GitHub: https://github.com/${repositorySlug}/releases/tag/${tagName} ✓`)
     console.log(`   - npm: Manual publish required (see instructions above)`)
   }
+}
+
+async function main() {
+  const command = process.argv[2]
+  const versionType = process.argv[3]
+
+  if (command === 'prepare') {
+    if (!versionType) {
+      console.error('Usage: bun scripts/release.ts prepare [patch|minor|major|0.x.x]')
+      process.exit(1)
+    }
+    prepareRelease(versionType)
+    return
+  }
+
+  if (command === 'publish') {
+    publishCurrentVersion()
+    return
+  }
+
+  console.error('Usage: bun scripts/release.ts prepare [patch|minor|major|0.x.x] | publish')
+  process.exit(1)
 }
 
 main().catch((error) => {

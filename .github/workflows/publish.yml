@@ -1,46 +1,39 @@
-name: Release
+name: Publish
 
 on:
-  workflow_dispatch:
-    inputs:
-      version_type:
-        description: 'Version bump type'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-        default: patch
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
 
 jobs:
-  prepare-release:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
-    
+      id-token: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: latest
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      
-      # Ensure npm 11.5.1 or later for trusted publishing
+
       - run: npm install -g npm@latest
-      
+
       - name: Install dependencies
         run: bun install
 
@@ -49,7 +42,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Run release script
-        run: bun scripts/release.ts prepare ${{ inputs.version_type }}
+      - name: Publish release
+        run: bun scripts/release.ts publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
