@@ -97,6 +97,14 @@ function remoteTagExists(tagName: string): boolean {
   return getCommandOutput(`git ls-remote --tags origin ${shellQuote(tagName)}`).length > 0
 }
 
+function npmVersionExists(packageName: string, version: string): boolean {
+  try {
+    return getCommandOutput(`npm view ${shellQuote(`${packageName}@${version}`)} version`) === version
+  } catch {
+    return false
+  }
+}
+
 function getPreviousTag(): string | null {
   try {
     return execSync('git describe --tags --abbrev=0 HEAD^', { encoding: 'utf-8' }).trim() || null
@@ -242,11 +250,6 @@ function publishCurrentVersion(): void {
 
   const tagName = `v${newVersion}`
 
-  if (remoteTagExists(tagName)) {
-    console.log(`\n✓ ${tagName} already exists on origin. Nothing to publish.`)
-    return
-  }
-
   console.log(`\n🚀 Publishing release ${tagName}`)
 
   runCommand('npm run build', 'Running build and tests')
@@ -255,8 +258,12 @@ function publishCurrentVersion(): void {
   const notesFile = `/tmp/release-notes-${newVersion}.md`
   writeFileSync(notesFile, releaseNotes)
 
-  runCommand(`git tag ${tagName} -m "Release ${tagName}"`, `Creating git tag ${tagName}`)
-  runCommand(`git push origin ${tagName}`, `Pushing tag ${tagName}`)
+  if (remoteTagExists(tagName)) {
+    console.log(`\n✓ ${tagName} already exists on origin. Skipping tag creation.`)
+  } else {
+    runCommand(`git tag ${tagName} -m "Release ${tagName}"`, `Creating git tag ${tagName}`)
+    runCommand(`git push origin ${tagName}`, `Pushing tag ${tagName}`)
+  }
 
   console.log('\n📝 Creating GitHub release...')
 
@@ -268,38 +275,34 @@ function publishCurrentVersion(): void {
   }
 
   console.log('\n📦 Publishing to npm...')
-  let npmPublished = false
+
+  if (npmVersionExists(name, newVersion)) {
+    console.log(`✓ ${name}@${newVersion} already exists on npm. Skipping npm publish.`)
+    console.log(`\n🎉 Release ${newVersion} completed successfully!`)
+    console.log(`   - Git tag: ${tagName}`)
+    console.log(`   - GitHub: https://github.com/${repositorySlug}/releases/tag/${tagName}`)
+    console.log(`   - npm: https://www.npmjs.com/package/${name}/v/${newVersion}`)
+    return
+  }
 
   try {
     runCommand('npm publish', 'Publishing to npm')
     console.log(`\n✅ Successfully published ${name}@${newVersion} to npm!`)
     console.log(`   https://www.npmjs.com/package/${name}`)
-    npmPublished = true
   } catch (error) {
     console.error('\n⚠️  npm publish failed. Common reasons:')
     console.error('   1. Trusted Publishing is not configured for this repository')
     console.error('   2. Package name already exists (version conflict)')
     console.error('   3. The GitHub Actions workflow is missing id-token: write')
     console.error('   4. The publish step is not running in GitHub Actions')
-    console.error('\n   You can manually publish with: npm publish')
-    console.error('\n   Note: All other steps completed successfully!')
-    console.error('   - Version bumped ✓')
-    console.error('   - Git tag created ✓')
-    console.error('   - GitHub release created ✓')
-    console.error('   - Only npm publish needs manual intervention')
+    console.error('\n   Tag and GitHub release may already exist. After fixing npm permissions, rerun this workflow to retry npm publish.')
+    throw error
   }
 
-  if (npmPublished) {
-    console.log(`\n🎉 Release ${newVersion} completed successfully!`)
-    console.log(`   - Git tag: ${tagName}`)
-    console.log(`   - GitHub: https://github.com/${repositorySlug}/releases/tag/${tagName}`)
-    console.log(`   - npm: https://www.npmjs.com/package/${name}`)
-  } else {
-    console.log(`\n✅ Release ${newVersion} partially completed!`)
-    console.log(`   - Git tag: ${tagName} ✓`)
-    console.log(`   - GitHub: https://github.com/${repositorySlug}/releases/tag/${tagName} ✓`)
-    console.log(`   - npm: Manual publish required (see instructions above)`)
-  }
+  console.log(`\n🎉 Release ${newVersion} completed successfully!`)
+  console.log(`   - Git tag: ${tagName}`)
+  console.log(`   - GitHub: https://github.com/${repositorySlug}/releases/tag/${tagName}`)
+  console.log(`   - npm: https://www.npmjs.com/package/${name}`)
 }
 
 async function main() {
