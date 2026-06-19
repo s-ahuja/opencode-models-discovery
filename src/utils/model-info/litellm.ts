@@ -74,14 +74,25 @@ function applyLiteLLMModelInfo(modelConfig: any, entry: LiteLLMModelInfoEntry | 
   const info = entry?.model_info
   if (!info) return
 
-  const contextLimit = hasUsableNumber(info.max_input_tokens) ? info.max_input_tokens : info.max_tokens
-  const outputLimit = hasUsableNumber(info.max_output_tokens) ? info.max_output_tokens : info.max_tokens
-  if (hasUsableNumber(contextLimit) && hasUsableNumber(outputLimit)) {
-    modelConfig.limit = {
-      context: contextLimit,
-      input: hasUsableNumber(info.max_input_tokens) ? info.max_input_tokens : undefined,
-      output: outputLimit,
-    }
+  const DEFAULT_CONTEXT = 200000
+  const DEFAULT_OUTPUT = 32000
+
+  const contextLimit = hasUsableNumber(info.max_input_tokens) 
+    ? info.max_input_tokens 
+    : hasUsableNumber(info.max_tokens)
+      ? info.max_tokens
+      : DEFAULT_CONTEXT
+
+  const outputLimit = hasUsableNumber(info.max_output_tokens) 
+    ? info.max_output_tokens 
+    : hasUsableNumber(info.max_tokens)
+      ? info.max_tokens
+      : DEFAULT_OUTPUT
+
+  modelConfig.limit = {
+    context: contextLimit,
+    input: hasUsableNumber(info.max_input_tokens) ? info.max_input_tokens : undefined,
+    output: outputLimit,
   }
 
   if (info.supports_reasoning === true) {
