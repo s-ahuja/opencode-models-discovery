@@ -76,23 +76,27 @@ function applyLiteLLMModelInfo(
   entry: LiteLLMModelInfoEntry | undefined,
   modelsDevCache?: Map<string, ModelsDevModel>
 ): void {
-  const info = entry?.model_info
-  if (!info) return
-
   const DEFAULT_CONTEXT = 200000
   const DEFAULT_OUTPUT = 32000
 
-  let contextLimit = hasUsableNumber(info.max_input_tokens) 
-    ? info.max_input_tokens 
-    : hasUsableNumber(info.max_tokens)
-      ? info.max_tokens
-      : undefined
+  const info = entry?.model_info
+  
+  let contextLimit: number | undefined
+  let outputLimit: number | undefined
 
-  let outputLimit = hasUsableNumber(info.max_output_tokens) 
-    ? info.max_output_tokens 
-    : hasUsableNumber(info.max_tokens)
-      ? info.max_tokens
-      : undefined
+  if (info) {
+    contextLimit = hasUsableNumber(info.max_input_tokens) 
+      ? info.max_input_tokens 
+      : hasUsableNumber(info.max_tokens)
+        ? info.max_tokens
+        : undefined
+
+    outputLimit = hasUsableNumber(info.max_output_tokens) 
+      ? info.max_output_tokens 
+      : hasUsableNumber(info.max_tokens)
+        ? info.max_tokens
+        : undefined
+  }
 
   let modelsDevData: ModelsDevModel | undefined
   if (modelsDevCache) {
@@ -113,19 +117,23 @@ function applyLiteLLMModelInfo(
 
   modelConfig.limit = {
     context: contextLimit,
-    input: hasUsableNumber(info.max_input_tokens) ? info.max_input_tokens : undefined,
+    input: info && hasUsableNumber(info.max_input_tokens) ? info.max_input_tokens : undefined,
     output: outputLimit,
   }
 
-  if (info.supports_reasoning === true) {
-    modelConfig.reasoning = true
+  if (info) {
+    if (info.supports_reasoning === true) {
+      modelConfig.reasoning = true
+    } else if (modelsDevData?.reasoning !== undefined) {
+      modelConfig.reasoning = modelsDevData.reasoning
+    }
+
+    const variants = createReasoningVariants(info)
+    if (variants) {
+      modelConfig.variants = variants
+    }
   } else if (modelsDevData?.reasoning !== undefined) {
     modelConfig.reasoning = modelsDevData.reasoning
-  }
-
-  const variants = createReasoningVariants(info)
-  if (variants) {
-    modelConfig.variants = variants
   }
 
   if (modelsDevData) {

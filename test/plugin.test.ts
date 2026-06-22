@@ -135,22 +135,32 @@ describe('ModelDiscovery Plugin', () => {
     })
 
     it('should discover models for OpenAI-compatible providers', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [
-            { id: 'test-model-1', object: 'model', created: 1234567890, owned_by: 'local' },
-            { id: 'test-model-2', object: 'model', created: 1234567890, owned_by: 'local' }
-          ]
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ models: [] })
         })
-      })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: 'test-model-1', object: 'model', created: 1234567890, owned_by: 'local' },
+              { id: 'test-model-2', object: 'model', created: 1234567890, owned_by: 'local' }
+            ]
+          })
+        })
 
       const config: any = {
         provider: {
           ollama: {
             npm: '@ai-sdk/openai-compatible',
             name: 'Ollama',
-            options: { baseURL: 'http://127.0.0.1:11434/v1' },
+            options: { 
+              baseURL: 'http://127.0.0.1:11434/v1',
+              modelsDiscovery: {
+                enabled: true
+              }
+            },
             models: {}
           }
         }
@@ -159,8 +169,9 @@ describe('ModelDiscovery Plugin', () => {
 
       expect(config.provider?.ollama?.models).toBeDefined()
       expect(Object.keys(config.provider.ollama.models).length).toBe(2)
-      expect(mockFetch).toHaveBeenCalledTimes(1)
-      expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:11434/v1/models', expect.objectContaining({
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(mockFetch).toHaveBeenNthCalledWith(1, 'https://models.dev/models.json')
+      expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:11434/v1/models', expect.objectContaining({
         method: 'GET'
       }))
     })

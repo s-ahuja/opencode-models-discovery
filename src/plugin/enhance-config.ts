@@ -6,7 +6,7 @@ import { categorizeModel, formatModelName, extractModelOwner } from '../utils'
 import { normalizeBaseURL, discoverModelsFromProvider, discoverModelInfoFromProvider, autoDetectOpenAICompatibleProvider, canDiscoverModels } from '../utils/openai-compatible-api'
 import { createModelInfoEnricher, isSupportedModelInfoFormat, type ModelInfoEnricher } from '../utils/model-info'
 import { getProviderFilter, getDiscoveryConfig, getModelRegexFilter, getProviderModelRegexFilter, shouldDiscoverModel, shouldDiscoverProviderWithOverride } from '../types/plugin-config'
-import { fetchModelsDevData } from '../utils/models-dev-fetcher'
+import { fetchModelsDevData, lookupModelsDevData } from '../utils/models-dev-fetcher'
 import type { PluginLogger } from './logger'
 import type { PluginInput } from '@opencode-ai/plugin'
 import type { OpenAIModel } from '../types'
@@ -296,6 +296,13 @@ export async function enhanceConfig(
               input: ["text", "image"],
               output: ["text"]
             }
+          }
+
+          // Set default limits before enrichment (Tier 2 → Tier 3 fallback)
+          const modelsDevData = modelsDevCache ? lookupModelsDevData(model.id, modelsDevCache) : undefined
+          modelConfig.limit = {
+            context: modelsDevData?.limit?.context || modelsDevData?.limit?.input || 200000,
+            output: modelsDevData?.limit?.output || 32000
           }
 
           modelInfoEnricher?.applyModelInfo(modelConfig, model.id)
