@@ -110,25 +110,6 @@ export async function fetchModelsDirect(baseURL: string, endpoint: string = OPEN
   return data?.data?.map(model => model.id) || []
 }
 
-export async function autoDetectOpenAICompatibleProvider(): Promise<{ name: string; baseURL: string } | null> {
-  const candidates = [
-    { name: "LM Studio", ports: [1234, 8080, 11434] },
-    { name: "Ollama", ports: [11434] },
-    { name: "LocalAI", ports: [8080] },
-  ]
-
-  for (const candidate of candidates) {
-    for (const port of candidate.ports) {
-      const baseURL = `http://127.0.0.1:${port}`
-      const discovery = await discoverModelsFromProvider(baseURL)
-      if (discovery.ok) {
-        return { name: candidate.name, baseURL }
-      }
-    }
-  }
-  return null
-}
-
 export function isOpenAICompatibleProvider(provider: any): boolean {
   return provider &&
          typeof provider === 'object' &&

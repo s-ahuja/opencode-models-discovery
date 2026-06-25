@@ -3,7 +3,7 @@ import path from 'node:path'
 import { xdgData } from 'xdg-basedir'
 import { ToastNotifier } from '../ui/toast-notifier'
 import { categorizeModel, formatModelName, extractModelOwner } from '../utils'
-import { normalizeBaseURL, discoverModelsFromProvider, discoverModelInfoFromProvider, autoDetectOpenAICompatibleProvider, canDiscoverModels } from '../utils/openai-compatible-api'
+import { normalizeBaseURL, discoverModelsFromProvider, discoverModelInfoFromProvider, canDiscoverModels } from '../utils/openai-compatible-api'
 import { createModelInfoEnricher, isSupportedModelInfoFormat, type ModelInfoEnricher } from '../utils/model-info'
 import { getProviderFilter, getDiscoveryConfig, getModelRegexFilter, getProviderModelRegexFilter, shouldDiscoverModel, shouldDiscoverProviderWithOverride } from '../types/plugin-config'
 import { fetchModelsDevData } from '../utils/models-dev-fetcher'
@@ -326,16 +326,6 @@ export async function enhanceConfig(
         providerCount: openAICompatibleProviders.length,
         modelCount: totalModels,
       })
-    }
-
-    if (Object.keys(providers).length === 0) {
-      const detected = await autoDetectOpenAICompatibleProvider()
-      if (detected) {
-        logger.info('Detected OpenAI-compatible provider but found no configured providers', {
-          provider: detected.name,
-          baseURL: detected.baseURL,
-        })
-      }
     }
 
   } catch (error) {
