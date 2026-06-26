@@ -178,6 +178,184 @@ describe('ModelDiscovery Plugin', () => {
       expect(true).toBe(true)
     })
 
+    it('should warn once when legacy global discovery config is used', async () => {
+      vi.useFakeTimers()
+
+      try {
+        const hooksWithConfig = await ModelDiscoveryPlugin({
+          client: mockClient,
+          project: {
+            id: 'test-project',
+            name: 'test',
+            path: '/tmp',
+            worktree: '',
+            time: { created: Date.now() }
+          },
+          directory: '/tmp',
+          worktree: '',
+          $: vi.fn()
+        } as any, {
+          discovery: {
+            enabled: false
+          }
+        })
+
+        const config: any = {
+          command: {
+            existing: {
+              description: 'Existing command',
+              template: 'Keep me',
+            }
+          }
+        }
+
+        await hooksWithConfig.config(config)
+        await hooksWithConfig.config(config)
+
+        expect(config.command.existing).toEqual({
+          description: 'Existing command',
+          template: 'Keep me',
+        })
+        expect(config.command['models-discovery:migrate']).toEqual(expect.objectContaining({
+          description: 'Migrate opencode-models-discovery config',
+          agent: 'build',
+          template: expect.stringContaining('Use the customize-opencode skill.'),
+        }))
+        expect(config.command['models-discovery:migrate'].model).toBeUndefined()
+        expect(config.command['models-discovery:migrate'].template).toContain('opencode.json, opencode.jsonc, or .opencode/opencode.json')
+        expect(config.command['models-discovery:migrate'].template).toContain('~/.config/opencode/opencode.json')
+        expect(config.command['models-discovery:migrate'].template).toContain('OPENCODE_CONFIG')
+        expect(config.command['models-discovery:migrate'].template).toContain('/Library/Application Support/opencode/')
+        expect(config.command['models-discovery:migrate'].template).toContain('/etc/opencode/')
+        expect(config.command['models-discovery:migrate'].template).toContain('%ProgramData%\\opencode')
+        expect(config.command['models-discovery:migrate'].template).toContain('discovery.enabled')
+        expect(config.command['models-discovery:migrate'].template).toContain('provider.<id>.options.modelsDiscovery')
+        expect(config.command['models-discovery:migrate'].template).toContain('OPENCODE_MODELS_DISCOVERY_DEFAULT_ENABLED=false')
+        expect(config.command['models-discovery:migrate'].template).toContain('restart opencode')
+
+        expect(mockClient.tui.showToast).not.toHaveBeenCalled()
+
+        await hooksWithConfig.event({ event: { type: 'session.created' } })
+        expect(mockClient.tui.showToast).not.toHaveBeenCalled()
+
+        await hooksWithConfig.event({ event: { type: 'reference.updated', properties: {} } })
+
+        expect(mockClient.tui.showToast).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(500)
+        expect(mockClient.tui.showToast).toHaveBeenCalledTimes(1)
+        expect(mockClient.tui.showToast).toHaveBeenCalledWith({
+          body: expect.objectContaining({
+            title: 'Discovery Config Migration',
+            variant: 'warning',
+            message: expect.stringContaining('Global opencode-models-discovery config will be deprecated in v1.0.0')
+          })
+        })
+
+        await hooksWithConfig.event({ event: { type: 'server.connected', properties: {} } })
+        await vi.advanceTimersByTimeAsync(1500)
+        expect(mockClient.tui.showToast).toHaveBeenCalledTimes(2)
+
+        await vi.advanceTimersByTimeAsync(3000)
+        expect(mockClient.tui.showToast).toHaveBeenCalledTimes(3)
+
+        await vi.advanceTimersByTimeAsync(5000)
+        expect(mockClient.tui.showToast).toHaveBeenCalledTimes(4)
+
+        await hooksWithConfig.event({ event: { type: 'reference.updated', properties: {} } })
+        await vi.advanceTimersByTimeAsync(10000)
+        expect(mockClient.tui.showToast).toHaveBeenCalledTimes(4)
+
+        expect(mockClient.app.log).toHaveBeenCalledWith(expect.objectContaining({
+          body: expect.objectContaining({
+            level: 'warn',
+            message: 'Legacy global discovery configuration is deprecated',
+            extra: expect.objectContaining({
+              category: 'config',
+              migrationCommand: '/models-discovery:migrate'
+            })
+          })
+        }))
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('should not show migration warning for provider-level discovery config only', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: []
+        })
+      })
+
+      const config: any = {
+        provider: {
+          ollama: {
+            npm: '@ai-sdk/openai-compatible',
+            name: 'Ollama',
+            options: {
+              baseURL: 'http://127.0.0.1:11434/v1',
+              modelsDiscovery: {
+                enabled: true
+              }
+            },
+            models: {}
+          }
+        }
+      }
+
+      await pluginHooks.config(config)
+
+      expect(mockClient.tui.showToast).not.toHaveBeenCalled()
+      expect(config.command).toBeUndefined()
+    })
+
+    it('should not overwrite an existing migration command', async () => {
+      const hooksWithConfig = await ModelDiscoveryPlugin({
+        client: mockClient,
+        project: {
+          id: 'test-project',
+          name: 'test',
+          path: '/tmp',
+          worktree: '',
+          time: { created: Date.now() }
+        },
+        directory: '/tmp',
+        worktree: '',
+        $: vi.fn()
+      } as any, {
+        models: {
+          includeRegex: '^llama'
+        }
+      })
+
+      const config: any = {
+        command: {
+          'models-discovery:migrate': {
+            description: 'User command',
+            template: 'Do not replace this',
+          }
+        }
+      }
+
+      await hooksWithConfig.config(config)
+
+      expect(config.command['models-discovery:migrate']).toEqual({
+        description: 'User command',
+        template: 'Do not replace this',
+      })
+      expect(mockClient.app.log).toHaveBeenCalledWith(expect.objectContaining({
+        body: expect.objectContaining({
+          level: 'warn',
+          message: 'Migration command already exists; leaving user-defined command unchanged',
+          extra: expect.objectContaining({
+            command: 'models-discovery:migrate',
+          })
+        })
+      }))
+    })
+
     it('should discover models for OpenAI-compatible providers', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -1571,6 +1749,7 @@ describe('ModelDiscovery Plugin', () => {
       await pluginHooks.event({ event: { type: 'session.created' } })
       expect(true).toBe(true)
     })
+
   })
 
   describe('Chat Params Hook', () => {
