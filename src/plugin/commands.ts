@@ -27,11 +27,25 @@ Legacy opencode-models-discovery options are:
 
 Move these settings into provider.<id>.options.modelsDiscovery where possible.
 
+Field mapping:
+- discovery.enabled -> provider.<id>.options.modelsDiscovery.enabled only when needed to preserve behavior
+- models.includeRegex -> provider.<id>.options.modelsDiscovery.models.includeRegex
+- models.excludeRegex -> provider.<id>.options.modelsDiscovery.models.excludeRegex
+- smartModelName -> provider.<id>.options.modelsDiscovery.smartModelName
+- providers.exclude -> provider.<id>.options.modelsDiscovery.enabled=false for excluded editable providers
+
 Preserve unrelated config fields and formatting as much as possible.
 Do not modify files that do not declare this plugin.
 Do not guess provider IDs that are not present in editable config.
 Do not overwrite existing provider.<id>.options.modelsDiscovery fields unless the user explicitly asks you to.
 If migration cannot be done safely, explain what blocked it and show the exact manual changes needed.
+
+Explain the mechanism to the user before or after editing:
+- OpenCode's provider config defines the provider id, npm package, baseURL, API key source, and built-in provider enablement.
+- This plugin only discovers and injects models for providers; it does not enable a provider that OpenCode itself has disabled.
+- OpenCode built-in enabled_providers and disabled_providers control provider availability, while modelsDiscovery controls only model discovery for an available provider.
+- API keys can remain in provider.<id>.options.apiKey or in OpenCode /connect credentials; do not duplicate secrets unless the user asks.
+- After v1.0.0, provider-level modelsDiscovery is the configuration boundary for this plugin.
 
 For v1.0.0 behavior:
 - plugin-level global discovery config is deprecated
@@ -65,12 +79,15 @@ Use provider-level configuration under provider.<id>.options.modelsDiscovery. Pr
       "options": {
         "modelsDiscovery": {
           "enabled": true,
+          "endpoint": "/v1/models",
           "models": {
             "includeRegex": "...",
             "excludeRegex": "..."
           },
           "smartModelName": true,
-          "modelInfoFormat": "models.dev"
+          "modelInfoEndpoint": "/v1/model/info",
+          "modelInfoFormat": "litellm",
+          "filterNonChat": true
         }
       }
     }
@@ -79,13 +96,44 @@ Use provider-level configuration under provider.<id>.options.modelsDiscovery. Pr
 
 Only include fields the user needs. Do not add placeholder regex values.
 
+Explain the mechanism to the user:
+- OpenCode's provider config defines the provider id, npm package, baseURL, API key source, and built-in provider enablement.
+- This plugin runs during OpenCode startup, queries a provider's models endpoint, and merges discovered models into the active config for the current session.
+- OpenCode built-in enabled_providers and disabled_providers control whether providers are available at all.
+- provider.<id>.options.modelsDiscovery controls only discovery behavior for that provider.
+- API keys can be configured as provider.<id>.options.apiKey, but OpenCode /connect credentials can also be used for the same provider id. Do not duplicate secrets unless the user asks.
+- Config changes require restarting OpenCode because config is loaded at startup.
+
+Supported plugin options under provider.<id>.options.modelsDiscovery:
+- enabled: force enable or disable discovery for this provider
+- endpoint: provider-specific models endpoint path; defaults to /v1/models
+- models.includeRegex and models.excludeRegex: provider-specific model filters
+- smartModelName: use friendlier display names for discovered models
+- modelInfoFormat="models.dev": enrich from the public models.dev index without modelInfoEndpoint
+- modelInfoEndpoint plus modelInfoFormat="litellm": enrich from a LiteLLM-compatible model info endpoint
+- filterNonChat: when LiteLLM model info is available, skip non-chat models by default
+
 Recommended defaults:
 - omit modelsDiscovery.enabled when the user is fine with discovery defaulting on
 - set modelsDiscovery.enabled=false to disable discovery for a specific provider
+- omit endpoint when the provider uses the standard /v1/models endpoint
 - use models.includeRegex or models.excludeRegex only when the user wants model filtering
 - use smartModelName=true only when the user wants friendlier display names
 - use modelInfoFormat="models.dev" for models.dev metadata enrichment
 - use modelInfoEndpoint and modelInfoFormat="litellm" for LiteLLM-compatible model info endpoints
+
+Provider compatibility guidance:
+- Discovery works for @ai-sdk/openai-compatible providers by default.
+- Providers with a /v1 baseURL can often be discovered even when using another npm package.
+- Providers with non-standard models paths should set modelsDiscovery.endpoint.
+- modelsDiscovery.enabled=true can force discovery for a provider that does not match automatic compatibility detection.
+
+Configuration compatibility boundary:
+- v0.12.x still supports deprecated plugin-level discovery config for compatibility.
+- v1.0.0 will remove plugin-level discovery config.
+- Recommended new config should use provider.<id>.options.modelsDiscovery.
+- Discovery is planned to remain enabled by default in v1.0.0 unless a provider sets modelsDiscovery.enabled=false.
+- A future OPENCODE_MODELS_DISCOVERY_DEFAULT_ENABLED=false environment variable is planned for users who want unspecified providers to default to disabled.
 
 Preserve unrelated config fields and formatting as much as possible.
 Do not overwrite existing provider.<id>.options.modelsDiscovery fields unless the user explicitly asks you to.
