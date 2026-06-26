@@ -127,7 +127,7 @@ describe('ModelDiscovery Plugin', () => {
       expect(hooks).toBeDefined()
       expect(hooks.config).toBeTypeOf('function')
       expect(hooks.event).toBeTypeOf('function')
-      expect(hooks['chat.params']).toBeTypeOf('function')
+      expect(hooks['chat.params']).toBeUndefined()
     })
 
     it('should handle invalid client gracefully', async () => {
@@ -150,7 +150,7 @@ describe('ModelDiscovery Plugin', () => {
       expect(hooks).toBeDefined()
       expect(hooks.config).toBeTypeOf('function')
       expect(hooks.event).toBeTypeOf('function')
-      expect(hooks['chat.params']).toBeTypeOf('function')
+      expect(hooks['chat.params']).toBeUndefined()
       expect(consoleSpy).toHaveBeenCalledWith('[opencode-models-discovery] Invalid client provided to plugin', { category: 'plugin' })
 
       consoleSpy.mockRestore()
@@ -1783,31 +1783,6 @@ describe('ModelDiscovery Plugin', () => {
       expect(true).toBe(true)
     })
 
-  })
-
-  describe('Chat Params Hook', () => {
-    it('should be defined as a function', () => {
-      expect(pluginHooks['chat.params']).toBeTypeOf('function')
-    })
-
-    it('should do nothing (validation disabled)', async () => {
-      const input = {
-        sessionID: 'test-session',
-        model: { id: 'test-model' },
-        provider: {
-          npm: '@ai-sdk/openai-compatible',
-          info: { id: 'ollama' },
-          options: { baseURL: 'http://127.0.0.1:11434/v1' }
-        }
-      }
-      const output: any = {}
-
-      await pluginHooks['chat.params'](input, output)
-
-      // Validation is disabled - no operations should be performed
-      expect(output).toEqual({})
-      expect(mockClient.tui.showToast).not.toHaveBeenCalled()
-    })
   })
 
   describe('Error Handling', () => {

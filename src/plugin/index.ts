@@ -2,7 +2,6 @@ import type { Plugin, PluginInput, PluginOptions } from "@opencode-ai/plugin"
 import { ToastNotifier } from '../ui/toast-notifier'
 import { createConfigHook } from './config-hook'
 import { createEventHook } from './event-hook'
-import { createChatParamsHook } from './chat-params-hook'
 import { createPluginLogger } from './logger'
 import { createLegacyGlobalConfigWarningController } from './legacy-config-warning'
 import { parsePluginConfig, type PluginConfig } from '../types/plugin-config'
@@ -16,7 +15,6 @@ export const ModelDiscoveryPlugin: Plugin = async (input: PluginInput, options?:
     return {
       config: async () => { },
       event: async () => { },
-      "chat.params": async () => { }
     }
   }
 
@@ -34,7 +32,6 @@ export const ModelDiscoveryPlugin: Plugin = async (input: PluginInput, options?:
   return {
     config: createConfigHook(client, toastNotifier, pluginConfig, legacyGlobalConfigWarning, logger.child({ category: 'config' })),
     event: createEventHook(toastNotifier, legacyGlobalConfigWarning, logger.child({ category: 'event' })),
-    "chat.params": createChatParamsHook(toastNotifier, pluginConfig),
   }
 }
 
