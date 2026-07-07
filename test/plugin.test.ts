@@ -1028,7 +1028,7 @@ describe('ModelDiscovery Plugin', () => {
       expect(config.provider.openai.models['unknown/local-model']).not.toHaveProperty('tool_call')
     })
 
-    it('should use models.dev model names for custom provider smart names', async () => {
+    it('should use models.dev display names for custom provider smart names', async () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,

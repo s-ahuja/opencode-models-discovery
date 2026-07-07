@@ -88,13 +88,13 @@ Those fields may be useful later, but they should not be added to generated Open
 
 ## Matching Strategy
 
-The matcher is intentionally based on model names, not provider ids, so custom provider ids can still use models.dev metadata.
+The matcher is intentionally based on model id segments, not provider ids or display names, so custom provider ids can still use models.dev metadata.
 
 Exact id matches are preferred first.
 
-Provider-qualified model ids may match models.dev entries from a different provider when the model-name segment is the same. For example, `custom/gpt-4o` may match the models.dev `openai/gpt-4o` entry by model name.
+Provider-qualified model ids may match models.dev entries from a different provider when the model id segment after the provider prefix is the same. For example, `custom/gpt-4o` may match the models.dev `openai/gpt-4o` entry because both ids have the `gpt-4o` model segment.
 
-Prefix matching is limited to strong model-name variants. It requires:
+Prefix matching is limited to strong model id segment variants. It requires:
 
 - at least two shared hyphen-delimited prefix parts
 - a score of at least `70`
@@ -151,8 +151,8 @@ The implementation includes tests for:
 - provider-nested models.dev schema parsing
 - flat model-id keyed models.dev schema parsing
 - exact matches
-- model-name-only matches across provider ids
-- strong model-name prefix matches
+- model id segment matches across provider ids
+- strong model id segment prefix matches
 - rejecting weak prefix matches
 
 Current verification:

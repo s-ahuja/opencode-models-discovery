@@ -60,7 +60,7 @@ describe('models.dev fetcher', () => {
     expect(lookupModelsDevData('openai/gpt-4o-2024-11-20', cache)?.id).toBe('openai/gpt-4o')
   })
 
-  it('should match model names without requiring the provider to match', () => {
+  it('should match model id segments without requiring the provider to match', () => {
     const cache = modelsDevTestUtils.parseModelsDevData({
       openai: {
         models: {
@@ -72,7 +72,7 @@ describe('models.dev fetcher', () => {
     expect(lookupModelsDevData('custom/shared-model', cache)?.id).toBe('openai/shared-model')
   })
 
-  it('should not match ambiguous duplicate model names', () => {
+  it('should not match ambiguous duplicate model id segments', () => {
     const cache = modelsDevTestUtils.parseModelsDevData({
       providerA: {
         models: {
