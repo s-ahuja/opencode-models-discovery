@@ -140,10 +140,16 @@ export function lookupModelsDevData(
   modelId: string,
   cache: Map<string, ModelsDevModel>
 ): ModelsDevModel | undefined {
-  const exactMatch = cache.get(modelId) ?? cache.get(modelId.toLowerCase())
+  let cleanId = modelId.replace(/:[a-zA-Z0-9_-]+$/g, '')
+  const parts = cleanId.split('/')
+  if (parts.length > 2) {
+    cleanId = parts.slice(-2).join('/')
+  }
+
+  const exactMatch = cache.get(cleanId) ?? cache.get(cleanId.toLowerCase())
   if (exactMatch) return exactMatch
 
-  const requestedModelLower = splitModelId(modelId).model.toLowerCase()
+  const requestedModelLower = splitModelId(cleanId).model.toLowerCase()
   const allCandidates: Array<[string, ModelsDevModel]> = []
 
   for (const [key, value] of cache.entries()) {
