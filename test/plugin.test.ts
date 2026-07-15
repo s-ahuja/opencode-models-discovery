@@ -2139,6 +2139,73 @@ describe('ModelDiscovery Plugin', () => {
       expect(config.provider.gateway.models['qwen-chat']).toBeUndefined()
     })
 
+    it('should allow google models from google key/direct but not from openrouter/opencode proxies', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [
+            // Direct Google key / Bifrost models (should be allowed)
+            { id: 'gemini/gemini-3.1-flash-lite', object: 'model', created: 1234567890 },
+            { id: 'gemini/gemini-3.1-flash-lite-preview', object: 'model', created: 1234567890 },
+            { id: 'gemini/gemma-4-31b-it', object: 'model', created: 1234567890 },
+            
+            // Proxy Google/Gemini models (should be excluded)
+            { id: 'bifrost/openrouter/google/gemini-2.5-flash:free', object: 'model', created: 1234567890 },
+            { id: 'bifrost/opencode-zen/google/gemini-2.5-flash:free', object: 'model', created: 1234567890 },
+            
+            // Other non-google free models (should be allowed)
+            { id: 'bifrost/opencode-zen/deepseek-v4-flash-free', object: 'model', created: 1234567890 },
+            
+            // Non-google paid/non-free models (should be excluded)
+            { id: 'bifrost/openrouter/anthropic/claude-3-opus', object: 'model', created: 1234567890 }
+          ]
+        })
+      })
+
+      const config: any = {
+        provider: {
+          bifrost: {
+            npm: '@ai-sdk/openai-compatible',
+            name: 'Bifrost',
+            options: {
+              baseURL: 'http://localhost:8080/openai',
+              modelsDiscovery: {
+                models: {
+                  includeBy: [
+                    { field: 'id', match: 'free' },
+                    { field: 'id', equals: 'gemini/gemini-3.1-flash-lite' },
+                    { field: 'id', equals: 'gemini/gemini-3.1-flash-lite-preview' },
+                    { field: 'id', equals: 'gemini/gemma-4-31b-it' }
+                  ],
+                  excludeBy: [
+                    { field: 'id', match: '(openrouter|opencode).*(google|gemini|gemma)' }
+                  ]
+                }
+              }
+            },
+            models: {}
+          }
+        }
+      }
+
+      await pluginHooks.config(config)
+
+      // Verify that direct Google models are allowed
+      expect(config.provider.bifrost.models['gemini/gemini-3.1-flash-lite']).toBeDefined()
+      expect(config.provider.bifrost.models['gemini/gemini-3.1-flash-lite-preview']).toBeDefined()
+      expect(config.provider.bifrost.models['gemini/gemma-4-31b-it']).toBeDefined()
+
+      // Verify that other free models are allowed
+      expect(config.provider.bifrost.models['bifrost/opencode-zen/deepseek-v4-flash-free']).toBeDefined()
+
+      // Verify that proxy Google models are excluded/filtered out
+      expect(config.provider.bifrost.models['bifrost/openrouter/google/gemini-2.5-flash:free']).toBeUndefined()
+      expect(config.provider.bifrost.models['bifrost/opencode-zen/google/gemini-2.5-flash:free']).toBeUndefined()
+
+      // Verify that paid non-google models are excluded
+      expect(config.provider.bifrost.models['bifrost/openrouter/anthropic/claude-3-opus']).toBeUndefined()
+    })
+
     it('should filter/remove existing models that do not match the includeBy / excludeBy filters', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
