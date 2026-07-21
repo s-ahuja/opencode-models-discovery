@@ -173,6 +173,62 @@ export async function enhanceConfig(
   logger: PluginLogger
 ): Promise<void> {
   try {
+    const cachePath = path.join(process.env.HOME || '', '.config', 'opencode', 'opencode-models-discovery.json')
+    const TTL_MS = 24 * 60 * 60 * 1000 // 1 day
+    let cacheData: any = null
+    let useCache = false
+
+    const getISTString = (): string => {
+      const date = new Date()
+      const utc = date.getTime() + (date.getTimezoneOffset() * 60000)
+      const ist = new Date(utc + (3600000 * 5.5))
+      const pad = (n: number) => n.toString().padStart(2, '0')
+      return `${ist.getFullYear()}-${pad(ist.getMonth() + 1)}-${pad(ist.getDate())}T${pad(ist.getHours())}:${pad(ist.getMinutes())}:${pad(ist.getSeconds())}+05:30`
+    }
+
+    const getStableConfigHash = (provider: any): string => {
+      if (!provider) return ''
+      const cleanProviders: Record<string, any> = {}
+      for (const [name, p] of Object.entries(provider)) {
+        const prov = p as any
+        cleanProviders[name] = {
+          npm: prov.npm,
+          baseURL: prov.options?.baseURL,
+          apiKey: prov.options?.apiKey,
+          modelsDiscovery: prov.options?.modelsDiscovery
+        }
+      }
+      return JSON.stringify(cleanProviders)
+    }
+
+    const isTest = process.env.NODE_ENV === 'test' || !!process.env.VITEST
+
+    if (!isTest) {
+      try {
+        const fileContent = await fs.readFile(cachePath, 'utf8')
+        cacheData = JSON.parse(fileContent)
+        const configHash = getStableConfigHash(config.provider)
+        if (cacheData && 
+            cacheData.configHash === configHash && 
+            cacheData.LastUpdatedModelTimestamp &&
+            (Date.now() - new Date(cacheData.LastUpdatedModelTimestamp).getTime()) < TTL_MS) {
+          useCache = true
+        }
+      } catch (err) {
+        // Cache file doesn't exist or is invalid
+      }
+    }
+
+    if (useCache && cacheData) {
+      logger.info('Using cached models from opencode-models-discovery.json')
+      for (const [providerName, cachedProvider] of Object.entries(cacheData.providers)) {
+        if (config.provider && config.provider[providerName]) {
+          config.provider[providerName].models = (cachedProvider as any).models
+        }
+      }
+      return
+    }
+
     const providers = config.provider || {}
     const openAICompatibleProviders: DiscoveredProvider[] = []
     const discoveryConfig = getDefaultDiscoveryConfigFromEnv(logger.child({ category: 'config' }))
@@ -361,6 +417,26 @@ export async function enhanceConfig(
         providerCount: openAICompatibleProviders.length,
         modelCount: totalModels,
       })
+    }
+
+    // Save to cache file
+    if (!isTest) {
+      const newCacheData = {
+        LastUpdatedModelTimestamp: getISTString(),
+        configHash: getStableConfigHash(config.provider),
+        providers: {} as Record<string, any>
+      }
+      for (const [providerName, providerConfig] of Object.entries(config.provider || {})) {
+        newCacheData.providers[providerName] = {
+          models: (providerConfig as any).models || {}
+        }
+      }
+      try {
+        await fs.writeFile(cachePath, JSON.stringify(newCacheData, null, 2), 'utf8')
+        logger.info('Saved discovered models to cache file', { cachePath })
+      } catch (writeErr) {
+        logger.warn('Failed to write models cache file', { error: String(writeErr) })
+      }
     }
 
   } catch (error) {
